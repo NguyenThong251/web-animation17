@@ -41,6 +41,14 @@ async function resolveFile(urlPath) {
 createServer(async (req, res) => {
   const f = await resolveFile(req.url);
   if (!f) {
+    // Like the origin (and GitHub Pages), unknown routes get the site's own 404 page.
+    // GitHub Pages project sites use /<repo>/404.html, so try the first path segment too.
+    const seg = req.url.split("?")[0].split("/")[1];
+    const nf = !extname(req.url.split("?")[0]) && ((seg && (await resolveFile(`/${seg}/404.html`))) || (await resolveFile("/404.html")));
+    if (nf) {
+      res.writeHead(404, { "content-type": MIME[".html"], "access-control-allow-origin": "*" });
+      return createReadStream(nf.abs).pipe(res);
+    }
     res.writeHead(404, { "content-type": "text/plain" });
     return res.end("404 Not Found");
   }

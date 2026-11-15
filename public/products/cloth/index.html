@@ -33,13 +33,17 @@
     }
     if (hget(headers, "rsc") === "1") {
       var key = ROUTES[p];
-      if (!key) return realFetch(input, init);
+      // Unknown route: the origin answers with its catch-all not-found tree (status 200);
+      // serving HTML here instead would make the router hard-reload forever.
+      var slug = key ? null : JSON.stringify(decodeURIComponent(p.slice(1))).slice(1, -1);
+      if (!key) key = "_404";
       var seg = hget(headers, "next-router-segment-prefetch");
       var variant = seg ? (seg === "/_tree" ? "tree" : null) : hget(headers, "next-router-prefetch") ? "pf" : "full";
       if (!variant) return Promise.resolve(withUrl(new Response("", { status: 404 }), url.href));
       return realFetch(BASE + "/__rsc/" + key + "/" + variant + ".rsc").then(function (r) {
         if (!r.ok) return r;
         return r.arrayBuffer().then(function (b) {
+          if (slug !== null) b = new TextDecoder().decode(b).split("__CLONE_404_SLUG__").join(slug);
           return withUrl(new Response(b, { status: 200, headers: { "Content-Type": "text/x-component" } }), url.href);
         });
       });

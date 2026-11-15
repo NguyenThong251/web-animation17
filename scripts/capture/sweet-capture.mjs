@@ -13,16 +13,22 @@ const ROUTES = ["/", "/products", "/about", "/news", "/contact", "/products/mask
 const save = (p, buf) => { const d = join(DEST, p); mkdirSync(dirname(d), { recursive: true }); writeFileSync(d, buf); };
 const htmlPath = (r) => (r === "/" ? "/index.html" : `${r}/index.html`);
 
-// 1. raw SSR HTML
-for (const r of ROUTES) {
+// 1. raw SSR HTML (skipped on the mobile pass)
+const MOBILE = process.env.MOBILE === "1";
+for (const r of MOBILE ? [] : ROUTES) {
   const res = await fetch(ORIGIN + r, { headers: { "user-agent": UA } });
   save(htmlPath(r), Buffer.from(await res.arrayBuffer()));
   console.log("html", res.status, r);
 }
 
 const browser = await chromium.launch({ headless: true, args: ["--enable-gpu", "--use-angle=d3d11", "--ignore-gpu-blocklist"] });
-const ctx = await browser.newContext({ userAgent: UA, viewport: { width: 1440, height: 900 } });
+const ctx = await browser.newContext(MOBILE
+  ? { userAgent: "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1", viewport: { width: 390, height: 844 }, deviceScaleFactor: 3, isMobile: true, hasTouch: true }
+  : { userAgent: UA, viewport: { width: 1440, height: 900 } });
 const seen = new Map(); const rsc = [];
+const { readdirSync, statSync } = await import("node:fs");
+(function walk(d) { if (!existsSync(d)) return; for (const f of readdirSync(d)) { const p = join(d, f); statSync(p).isDirectory() ? walk(p) : seen.set("/" + p.slice(DEST.length).replace(/^[\/]+/, "").split("\\").join("/"), "pre"); } })(DEST);
+const before = seen.size;
 ctx.on("response", async (res) => {
   try {
     const u = new URL(res.url());
@@ -32,14 +38,14 @@ ctx.on("response", async (res) => {
     if (isRsc) {
       const body = await res.body();
       const key = `${u.pathname}|${req.headers()["next-router-prefetch"] ? "prefetch" : "full"}|${req.headers()["next-router-segment-prefetch"] || ""}`;
-      if (!seen.has("rsc:" + key)) { seen.set("rsc:" + key, true); rsc.push({ path: u.pathname, prefetch: !!req.headers()["next-router-prefetch"], segment: req.headers()["next-router-segment-prefetch"] || null, ct: res.headers()["content-type"], size: body.length, url: u.pathname + u.search }); save(`/__rsc${u.pathname === "/" ? "/index" : u.pathname}.${rsc.length}.rsc`, body); }
+      if (!seen.has("rsc:" + key)) { seen.set("rsc:" + key, true); if (MOBILE) return; rsc.push({ path: u.pathname, prefetch: !!req.headers()["next-router-prefetch"], segment: req.headers()["next-router-segment-prefetch"] || null, ct: res.headers()["content-type"], size: body.length, url: u.pathname + u.search }); save(`/__rsc${u.pathname === "/" ? "/index" : u.pathname}.${rsc.length}.rsc`, body); }
       return;
     }
     if (ROUTES.includes(u.pathname) || u.pathname.endsWith("/")) return;
     if (seen.has(u.pathname)) return;
     seen.set(u.pathname, true);
     const body = await res.body();
-    if (body.length) save(decodeURIComponent(u.pathname), body);
+    if (body.length) { save(decodeURIComponent(u.pathname), body); if (seen.get(u.pathname) === true) console.log("  + new", u.pathname); }
   } catch {}
 });
 
@@ -63,5 +69,5 @@ for (const r of ROUTES.slice(1)) {
   try { await page.evaluate((href) => { const a = document.querySelector(`a[href="${href}"]`); if (a) a.click(); }, r); await page.waitForTimeout(3500); } catch {}
 }
 await browser.close();
-writeFileSync(join(DEST, "..", "rsc-log.json"), JSON.stringify(rsc, null, 1));
-console.log("done: files", seen.size, "rsc", rsc.length);
+writeFileSync(join(DEST, "..", MOBILE ? "rsc-log-mobile.json" : "rsc-log.json"), JSON.stringify(rsc, null, 1));
+console.log("done: files", seen.size, "new this pass", seen.size - before, "rsc", rsc.length);

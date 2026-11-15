@@ -10,13 +10,22 @@ const VARIANTS = {
   pf: { RSC: "1", "Next-Router-Prefetch": "1" },
   tree: { RSC: "1", "Next-Router-Prefetch": "1", "Next-Router-Segment-Prefetch": "/_tree" },
 };
-const keyOf = (r) => (r === "/" ? "index" : r.slice(1));
-for (const r of ROUTES) {
+const keyOf = (r) => (r === "/" ? "index" : r === NOT_FOUND ? "_404" : r.slice(1));
+// Unknown routes hit the site's catch-all [slug] not-found tree; capture it once with a
+// placeholder slug that the clone shim swaps for the requested path at runtime.
+const NOT_FOUND = "/this-page-does-not-exist";
+const SLUG_MARK = "__CLONE_404_SLUG__";
+for (const r of [...ROUTES, NOT_FOUND]) {
   for (const [v, h] of Object.entries(VARIANTS)) {
     const res = await fetch(`https://sweet-tape.com${r}?_rsc=clone`, { headers: { "user-agent": UA, ...h } });
     const ct = res.headers.get("content-type") || "";
     if (!res.ok || !ct.startsWith("text/x-component")) { console.log("FAIL", res.status, ct, r, v); continue; }
-    const buf = Buffer.from(await res.arrayBuffer());
+    let buf = Buffer.from(await res.arrayBuffer());
+    if (r === NOT_FOUND) {
+      const s = buf.toString("utf8"), n = s.split(NOT_FOUND.slice(1)).length - 1;
+      if (n < 1) { console.log("FAIL no slug in 404 payload", v); continue; }
+      buf = Buffer.from(s.split(NOT_FOUND.slice(1)).join(SLUG_MARK), "utf8");
+    }
     const d = join(root, "__rsc", keyOf(r)); mkdirSync(d, { recursive: true });
     writeFileSync(join(d, `${v}.rsc`), buf);
     console.log(String(buf.length).padStart(7), r, v);

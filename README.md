@@ -15,7 +15,7 @@ Bản clone 1:1 của [sweet-tape.com](https://sweet-tape.com/) (SweetTape — "
 
 Giữ nguyên bản build gốc (tải byte-for-byte), không build lại:
 
-- `public/` = 284 file / ~29 MB: HTML SSR của 13 route, toàn bộ `_next/static`, `/assets`, media Payload, model GLB, âm thanh, icon/manifest. Đã quét closure mọi tham chiếu trong HTML/JS/CSS/RSC → chỉ còn 2 file mà **chính bản gốc cũng 404** (`/assets/sticky-note.png`, `/assets/sounds/tape-cut.mp3`).
+- `public/` = 285 file / ~29 MB: HTML SSR của 13 route + trang `404.html` riêng của site, toàn bộ `_next/static`, `/assets`, media Payload, model GLB, âm thanh, icon/manifest. Đã quét closure mọi tham chiếu trong HTML/JS/CSS/RSC → chỉ còn 2 file mà **chính bản gốc cũng 404** (`/assets/sticky-note.png`, `/assets/sounds/tape-cut.mp3`).
 - `public/__rsc/<route>/{full,pf,tree}.rsc` — payload RSC của từng route (navigation đầy đủ, prefetch, prefetch `/_tree`).
 - `server.mjs` — static server không phụ thuộc: MIME đúng (wav/glb/rsc/webmanifest), HTTP Range, CORS.
 - `scripts/capture/` — các script đã dùng để capture, lấp asset thiếu, lấy RSC, lắp ráp và kiểm thử A/B.
@@ -25,6 +25,7 @@ Giữ nguyên bản build gốc (tải byte-for-byte), không build lại:
 Chỉ chèn một shim vào `<head>` mỗi trang + đổi URL GA; bundle JS giữ nguyên:
 
 - **Soft navigation trên host tĩnh**: router Next gửi request RSC kèm header (`RSC`, `Next-Router-Prefetch`, `Next-Router-Segment-Prefetch`) mà host tĩnh không phân biệt được → shim `fetch` trả payload RSC đã capture của đúng route, nên chuyển trang vẫn mượt như bản gốc (không reload).
+- **Trang 404**: route lạ trả `404.html` (status 404) như origin. Router Next luôn gọi RSC cho đường dẫn đó; origin trả cây not-found của route catch-all `[slug]` — shim trả payload `__rsc/_404/*.rsc` đã capture, thay slug bằng đường dẫn thật (nếu trả HTML, router sẽ hard-reload vô hạn).
 - **Form liên hệ** (`POST /api/messages`) được trả lời tại chỗ → hiện "SENT — WE'LL BE IN TOUCH" nhưng **không gửi dữ liệu đi đâu**.
 - **Google Analytics (G-9DT4VY7JGP) bị tắt**: bật cờ opt-out và trỏ `gtag.js` (trong HTML lẫn RSC) về file rỗng `__clone/no-ga.js`.
 - Bỏ `robots.txt` / `sitemap.xml` (trỏ về domain gốc).
@@ -47,3 +48,5 @@ Playwright headless GPU thật (ANGLE D3D11), A/B với origin trên cả 13 rou
 - So ảnh bằng 13 agent độc lập: 11 identical, 2 chỉ lệch pha animation (cuộn băng đang xoay).
 - Soft navigation: 5/5 lần chuyển trang không reload, title đúng — cả ở root lẫn subpath `/web-animation17/`.
 - Form liên hệ: "SENT", 0 request POST rời trang. Không còn request tới Google Analytics.
+- **Mobile** (iPhone 390×844, touch): capture riêng không phát sinh asset mới; A/B 13/13 route không khác biệt, soft-nav 5/5.
+- **404**: route 1 cấp và nhiều cấp — hiển thị "PAGE NOT FOUND" như origin, chỉ 1 lần load (không vòng lặp), "Back Home" soft-nav về trang chủ (cả ở subpath).

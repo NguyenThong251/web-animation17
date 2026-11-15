@@ -3,14 +3,16 @@ import { chromium } from "playwright";
 import { writeFileSync, mkdirSync } from "node:fs";
 
 const [BASE, label] = process.argv.slice(2);
-const ROUTES = ["/", "/products", "/about", "/news", "/contact", "/products/masking", "/products/double", "/products/stationery", "/products/cloth", "/products/opp", "/products/opp-quiet", "/news/same-tape-three-generations-finally-a-face", "/news/sweettape-now-at-mr-diy"];
+const ROUTES = process.env.ROUTES ? process.env.ROUTES.split(",") : ["/", "/products", "/about", "/news", "/contact", "/products/masking", "/products/double", "/products/stationery", "/products/cloth", "/products/opp", "/products/opp-quiet", "/news/same-tape-three-generations-finally-a-face", "/news/sweettape-now-at-mr-diy"];
 const origin = new URL(BASE).origin;
 mkdirSync(`shots-${label}`, { recursive: true });
 const browser = await chromium.launch({ headless: true, args: ["--enable-gpu", "--use-angle=d3d11", "--ignore-gpu-blocklist", "--autoplay-policy=no-user-gesture-required"] });
 const out = { routes: {}, softnav: null, form: null };
+const MOBILE = process.env.MOBILE === "1";
+const CTX = MOBILE ? { userAgent: "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1", viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true } : { viewport: { width: 1440, height: 900 } };
 
 for (const r of ROUTES) {
-  const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+  const ctx = await browser.newContext(CTX);
   const page = await ctx.newPage();
   const errors = [], bad = [], reqs = new Set(), external = new Set();
   page.on("console", (m) => { if (m.type() === "error") errors.push(m.text().slice(0, 200)); });
@@ -48,7 +50,7 @@ for (const r of ROUTES) {
 
 // soft navigation: click menu links from home; a full reload would wipe the marker
 {
-  const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+  const ctx = await browser.newContext(CTX);
   const page = await ctx.newPage();
   const errors = [];
   page.on("pageerror", (e) => errors.push(String(e).slice(0, 200)));
