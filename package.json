@@ -1,0 +1,10 @@
+{
+  "name": "sweettape-clone",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Faithful 1:1 mirror of sweet-tape.com (Next.js App Router RSC + Payload CMS, Turbopack build)",
+  "scripts": {
+    "dev": "node server.mjs public 4700",
+    "start": "node server.mjs public 4700"
+  }
+}

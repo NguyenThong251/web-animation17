@@ -1,0 +1,50 @@
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # public/ is the origin's Next.js App Router (RSC) build captured byte-for-byte,
+      # compiled for basePath "". Pages serves this repo at /web-animation17/, so rebase
+      # a COPY: HTML attributes (incl. data-* asset paths), RSC flight data, CSS url(),
+      # JS asset literals, Turbopack's chunk base and Next's basePath helpers.
+      # Each JS patch asserts its match count; a final scan fails on any leftover path.
+      - name: Prepare site
+        run: |
+          rm -rf _site && cp -r public _site
+          node scripts/subpath.mjs _site web-animation17
+          touch _site/.nojekyll
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
